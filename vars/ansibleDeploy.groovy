@@ -1,7 +1,5 @@
 def call(Map config = [:]) {
 
-    def cfg = [:]
-
     pipeline {
 
         agent any
@@ -10,33 +8,35 @@ def call(Map config = [:]) {
 
             stage('Clone') {
                 steps {
-                    echo "Cloning application repository..."
-
                     checkout scm
+                }
+            }
 
-                    echo "Reading configuration file..."
+            stage('Load Configuration') {
+                steps {
+                    script {
+                        def configFile = config.configFile ?: 'config/deployment.conf'
+                        def configContent = readFile(file: configFile)
 
-                    def configFile = config.configFile ?: 'config/deployment.conf'
-                    def configContent = readFile file: configFile
+                        configContent.readLines().each { line ->
 
-                    configContent.readLines().each { line ->
+                            line = line.trim()
 
-                        line = line.trim()
+                            if (line && !line.startsWith('#') && line.contains('=')) {
 
-                        if (line && !line.startsWith('#') && line.contains('=')) {
+                                def parts = line.split('=', 2)
 
-                            def parts = line.split('=', 2)
+                                def key = parts[0].trim()
+                                def value = parts[1].trim()
 
-                            def key = parts[0].trim()
-                            def value = parts[1].trim()
-
-                            cfg[key] = value
+                                env."${key}" = value
+                            }
                         }
-                    }
 
-                    echo "Configuration loaded successfully"
-                    echo "Environment: ${cfg['ENVIRONMENT']}"
-                    echo "Code Base Path: ${cfg['CODE_BASE_PATH']}"
+                        echo "Configuration loaded"
+                        echo "Environment: ${env.ENVIRONMENT}"
+                        echo "Code Base Path: ${env.CODE_BASE_PATH}"
+                    }
                 }
             }
 
@@ -52,8 +52,6 @@ def call(Map config = [:]) {
 
             stage('Quality Gate') {
                 steps {
-                    echo "Checking SonarQube Quality Gate..."
-
                     timeout(time: 5, unit: 'MINUTES') {
                         waitForQualityGate abortPipeline: true
                     }
@@ -63,34 +61,32 @@ def call(Map config = [:]) {
             stage('User Approval') {
                 when {
                     expression {
-                        return cfg['KEEP_APPROVAL_STAGE']?.toBoolean()
+                        return env.KEEP_APPROVAL_STAGE?.toBoolean()
                     }
                 }
 
                 steps {
-                    input message: "Deploy to ${cfg['ENVIRONMENT']}?",
-                          ok: 'Approve'
+                    input(
+                        message: "Deploy to ${env.ENVIRONMENT}?",
+                        ok: 'Approve'
+                    )
                 }
             }
 
             stage('Playbook Execution') {
                 steps {
-                    echo "Executing Ansible Playbook..."
-
                     sh """
                         ansible-playbook site.yml \
-                        -e environment=${cfg['ENVIRONMENT']} \
-                        -e code_base_path=${cfg['CODE_BASE_PATH']}
+                        -e environment=${env.ENVIRONMENT} \
+                        -e code_base_path=${env.CODE_BASE_PATH}
                     """
                 }
             }
 
             stage('Notification') {
                 steps {
-                    echo "Sending notification..."
-
-                    echo "Slack Channel: ${cfg['SLACK_CHANNEL_NAME']}"
-                    echo "Message: ${cfg['ACTION_MESSAGE']}"
+                    echo "Slack Channel: ${env.SLACK_CHANNEL_NAME}"
+                    echo "Message: ${env.ACTION_MESSAGE}"
                 }
             }
         }
