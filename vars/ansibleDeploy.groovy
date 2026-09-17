@@ -89,15 +89,14 @@ def call(Map config = [:]) {
             }
 
             stage('Notification') {
-               steps {
-                   slackSend(
+                steps {
+                    slackSend(
                         channel: '#jenkins-notifications',
                         message: config.actionMessage
-        )
-    }
-}
+                    )
                 }
             }
+
         }
     }
 }
