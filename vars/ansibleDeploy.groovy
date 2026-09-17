@@ -45,7 +45,12 @@ def call(Map config = [:]) {
                     echo "Running SonarQube Analysis..."
 
                     withSonarQubeEnv('SonarQube') {
-                        sh 'mvn clean verify sonar:sonar'
+                        sh '''
+                            mvn clean verify \
+                            org.sonarsource.scanner.maven:sonar-maven-plugin:3.10.0.2594:sonar \
+                            -Dsonar.projectKey=assignment-6 \
+                            -Dsonar.projectName=assignment-6
+                        '''
                     }
                 }
             }
