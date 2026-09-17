@@ -1,5 +1,7 @@
 def call(Map config = [:]) {
 
+    def cfg = [:]
+
     pipeline {
 
         agent any
@@ -7,15 +9,36 @@ def call(Map config = [:]) {
         stages {
 
             stage('Clone') {
-    steps {
-        echo "Cloning source code..."
+                steps {
+                    echo "Cloning application repository..."
 
-        git(
-            url: config.gitUrl,
-            branch: config.gitBranch ?: 'main'
-        )
-    }
-}
+                    checkout scm
+
+                    echo "Reading configuration file..."
+
+                    def configFile = config.configFile ?: 'config/deployment.conf'
+                    def configContent = readFile file: configFile
+
+                    configContent.readLines().each { line ->
+
+                        line = line.trim()
+
+                        if (line && !line.startsWith('#') && line.contains('=')) {
+
+                            def parts = line.split('=', 2)
+
+                            def key = parts[0].trim()
+                            def value = parts[1].trim()
+
+                            cfg[key] = value
+                        }
+                    }
+
+                    echo "Configuration loaded successfully"
+                    echo "Environment: ${cfg['ENVIRONMENT']}"
+                    echo "Code Base Path: ${cfg['CODE_BASE_PATH']}"
+                }
+            }
 
             stage('SonarQube Analysis') {
                 steps {
@@ -40,12 +63,12 @@ def call(Map config = [:]) {
             stage('User Approval') {
                 when {
                     expression {
-                        return config.keepApprovalStage == true
+                        return cfg['KEEP_APPROVAL_STAGE']?.toBoolean()
                     }
                 }
 
                 steps {
-                    input message: 'Do you want to continue deployment?',
+                    input message: "Deploy to ${cfg['ENVIRONMENT']}?",
                           ok: 'Approve'
                 }
             }
@@ -55,9 +78,9 @@ def call(Map config = [:]) {
                     echo "Executing Ansible Playbook..."
 
                     sh """
-                        ansible-playbook ${config.playbook ?: 'site.yml'} \
-                        -e environment=${config.environment ?: 'dev'} \
-                        -e code_base_path=${config.codeBasePath ?: 'env/dev'}
+                        ansible-playbook site.yml \
+                        -e environment=${cfg['ENVIRONMENT']} \
+                        -e code_base_path=${cfg['CODE_BASE_PATH']}
                     """
                 }
             }
@@ -66,8 +89,8 @@ def call(Map config = [:]) {
                 steps {
                     echo "Sending notification..."
 
-                    echo "Channel: ${config.slackChannelName}"
-                    echo "Message: ${config.actionMessage}"
+                    echo "Slack Channel: ${cfg['SLACK_CHANNEL_NAME']}"
+                    echo "Message: ${cfg['ACTION_MESSAGE']}"
                 }
             }
         }
