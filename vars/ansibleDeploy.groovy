@@ -7,11 +7,15 @@ def call(Map config = [:]) {
         stages {
 
             stage('Clone') {
-                steps {
-                    echo "Cloning source code..."
-                    checkout scm
-                }
-            }
+    steps {
+        echo "Cloning source code..."
+
+        git(
+            url: config.gitUrl,
+            branch: config.gitBranch ?: 'main'
+        )
+    }
+}
 
             stage('SonarQube Analysis') {
                 steps {
