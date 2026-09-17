@@ -91,8 +91,8 @@ def call(Map config = [:]) {
             stage('Notification') {
                 steps {
                     slackSend(
-                        channel: '#jenkins-notifications',
-                        message: config.actionMessage
+                        channel: "#${env.SLACK_CHANNEL_NAME}",
+                        message: env.ACTION_MESSAGE
                     )
                 }
             }
